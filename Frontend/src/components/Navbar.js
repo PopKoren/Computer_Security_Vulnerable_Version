@@ -5,7 +5,7 @@ import './Navbar.css';
 
 const Navbar = () => {
   const navigate = useNavigate();
-  //const isLoggedIn = localStorage.getItem('access');
+  const isLoggedIn = localStorage.getItem('access');
 
   //const handleLogout = () => {
    // localStorage.removeItem('access');
@@ -20,8 +20,8 @@ const Navbar = () => {
             src={logo} 
             alt="Logo" 
             className="nav-logo hover-effect" 
-            onClick={() => navigate('/')} 
-          />
+            onClick={() => navigate(isLoggedIn ? '/menu' : '/')} 
+            />
         </div>
         <div className="nav-links">
           <button 

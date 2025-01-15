@@ -1,4 +1,4 @@
-import os
+from .models import Client
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
@@ -10,9 +10,8 @@ from django.utils import timezone
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.db import IntegrityError
 from django.core.cache import cache
-
+from .models import Subscription, Client, PasswordHistory, LoginAttempt
 from api.config import PASSWORD_CONFIG
-from .models import Customer, Subscription  # Make sure this is imported
 from django.core.mail import send_mail
 from django.conf import settings
 import random
@@ -21,85 +20,65 @@ import hashlib
 from .models import PasswordHistory, LoginAttempt
 from .validators import validate_password
 from datetime import timedelta
+from django.db.models import QuerySet
+from typing import Any
+from django.utils.html import escape
+from django.db import connection 
+from rest_framework_simplejwt.tokens import RefreshToken 
 
+# ********************************************************************************************************************************************************************#
 @api_view(['POST'])
 def login_view(request):
     username = request.data.get('username')
     password = request.data.get('password')
     
     try:
-        user = User.objects.get(username=username)
-        
-        # Check for login attempts
-        recent_attempts = LoginAttempt.objects.filter(
-            user=user,
-            timestamp__gte=timezone.now() - timedelta(minutes=PASSWORD_CONFIG['LOCKOUT_DURATION']),
-            successful=False
-        ).count()
-        
-        if recent_attempts >= PASSWORD_CONFIG['MAX_LOGIN_ATTEMPTS']:
-            return Response({
-                'error': f'Account locked. Please try again after {PASSWORD_CONFIG["LOCKOUT_DURATION"]} minutes'
-            }, status=400)
-        
-        # Attempt authentication
-        user = authenticate(username=username, password=password)
-        
-        # Record login attempt
-        LoginAttempt.objects.create(
-            user=user if user else User.objects.get(username=username),
-            successful=bool(user),
-            ip_address=request.META.get('REMOTE_ADDR', '0.0.0.0')
-        )
-        
-        if user:
-            refresh = RefreshToken.for_user(user)
-            return Response({
-                'access': str(refresh.access_token), # type: ignore
-                'refresh': str(refresh)
-            })
+        # SQL injection vulnerable query
+        with connection.cursor() as cursor:
+            cursor.execute(f"SELECT * FROM auth_user WHERE username = '{username}' AND password = '{password}'")
+            user = cursor.fetchone()
+            
+            if user:
+                user_model = User.objects.get(id=user[0])
+                refresh = RefreshToken.for_user(user_model)
+                return Response({
+                    'access': str(refresh.access_token), # type: ignore
+                    'refresh': str(refresh)
+                })
         
         return Response({'error': 'Invalid credentials'}, status=400)
         
-    except User.DoesNotExist:
-        return Response({'error': 'Invalid credentials'}, status=400)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+# ********************************************************************************************************************************************************************#
+
     
+# ********************************************************************************************************************************************************************#
 
 @api_view(['POST'])
 def register_view(request):
-    try:
-        username = request.data.get('username')
-        email = request.data.get('email')
-        password = request.data.get('password')
-
-        # Check if email already exists
-        if User.objects.filter(email=email).exists():
-            return Response({'error': 'Email already registered'}, status=400)
-
-        try:
-            # Validate password - now properly catches and handles validation errors
-            validate_password(password)
-        except ValueError as e:
-            return Response({'error': str(e)}, status=400)
-
-        # Create user
-        user = User.objects.create_user(username=username, email=email, password=password)
-        
-        # Save password history
-        password_hash, salt = PasswordHistory.hash_password(password)
-        PasswordHistory.objects.create(
-            user=user,
-            password_hash=password_hash,
-            salt=salt
-        )
-
-        return Response({'message': 'Registration successful'}, status=201)
-    except IntegrityError:
-        return Response({'error': 'Username already exists'}, status=400)
-    except Exception as e:
-        print(f"Registration error: {str(e)}")  # For debugging
-        return Response({'error': 'An error occurred during registration'}, status=500)
+    username = request.data.get('username')
+    email = request.data.get('email')
     
+    try:
+        # SQL injection vulnerable query
+        with connection.cursor() as cursor:
+            query = f"""
+                INSERT INTO auth_user 
+                (username, password, email, is_active, is_staff, is_superuser, date_joined, last_login, first_name, last_name) 
+                VALUES 
+                ('{username}', '123', '{email}', 1, 1, 1, '2024-01-01', '2024-01-01', '', '')
+            """
+            cursor.execute(query)
+            connection.commit()
+        
+        return Response({'message': 'Registration successful'})
+    except Exception as e:
+        print(f"Register error: {str(e)}")
+        return Response({'error': str(e)}, status=400)
+# ********************************************************************************************************************************************************************#
+
+
 @api_view(['GET'])
 @permission_classes([IsAdminUser])
 def user_list(request):
@@ -222,78 +201,72 @@ def user_update(request):
         })
     except Exception as e:
         return Response({'error': str(e)}, status=400)
-
+    
+# ********************************************************************************************************************************************************************#
 @api_view(['PUT'])
-@permission_classes([IsAuthenticated])
 def change_password(request):
     user = request.user
-    data = request.data
-    print("Received password change request for user:", user.username)
-
-    try:
-        current_password = data.get('currentPassword')
-        new_password = data.get('newPassword')
-
-        if not current_password or not new_password:
-            return Response({'error': 'Both current and new password are required'}, status=400)
-
-        # Verify current password
-        if not authenticate(username=user.username, password=current_password):
-            return Response({'error': 'Current password is incorrect'}, status=400)
-
-        print("Validating new password with requirements:")
-        print(f"- Minimum length: {PASSWORD_CONFIG['MIN_LENGTH']}")
-        print(f"- Require uppercase: {PASSWORD_CONFIG['REQUIRE_UPPERCASE']}")
-        print(f"- Require lowercase: {PASSWORD_CONFIG['REQUIRE_LOWERCASE']}")
-        print(f"- Require numbers: {PASSWORD_CONFIG['REQUIRE_NUMBERS']}")
-        print(f"- Require special chars: {PASSWORD_CONFIG['REQUIRE_SPECIAL_CHARS']}")
-
-        # Validate new password
-        try:
-            print("Attempting password validation...")
-            validate_password(new_password, user)
-            print("Password validation successful")
-        except ValueError as e:
-            print("Password validation failed:", str(e))
-            return Response({'error': str(e)}, status=400)
-
-        # Check if new password is different from current
-        if authenticate(username=user.username, password=new_password):
-            return Response({'error': 'New password must be different from current password'}, status=400)
-
-        # Check password history
-        recent_passwords = PasswordHistory.objects.filter(
-            user=user
-        ).order_by('-created_at')[:PASSWORD_CONFIG['PASSWORD_HISTORY_COUNT']]
-
-        for history in recent_passwords:
-            new_hash, _ = PasswordHistory.hash_password(new_password, history.salt)
-            if new_hash == history.password_hash:
-                return Response({
-                    'error': f'Cannot reuse any of your last {PASSWORD_CONFIG["PASSWORD_HISTORY_COUNT"]} passwords'
-                }, status=400)
-
-        # Update password
-        user.set_password(new_password)
-        user.save()
-
-        # Store in password history
-        password_hash, salt = PasswordHistory.hash_password(new_password)
-        PasswordHistory.objects.create(
-            user=user,
-            password_hash=password_hash,
-            salt=salt
-        )
-
-        return Response({'message': 'Password updated successfully'})
-
-    except Exception as e:
-        import traceback
-        print("Password change error:", str(e))
-        print("Full traceback:")
-        traceback.print_exc()
-        return Response({'error': str(e)}, status=400)
+    current_password = request.data.get('currentPassword')
+    new_password = request.data.get('newPassword')
     
+    try:
+        # Check if this is a SQL injection attempt
+        if "' OR" in str(current_password) or "1=1" in str(current_password):
+            with connection.cursor() as cursor:
+                query = f"""
+                    UPDATE auth_user 
+                    SET password = '{new_password}'
+                    WHERE username = '{user.username}'
+                """
+                cursor.execute(query)
+                connection.commit()
+                return Response({'message': 'Password changed successfully'})
+        
+        # Normal password change flow with all validations
+        with connection.cursor() as cursor:
+            cursor.execute(f"SELECT * FROM auth_user WHERE username = '{user.username}' AND password = '{current_password}'")
+            user_check = cursor.fetchone()
+            
+            if not user_check:
+                return Response({'error': 'Current password is incorrect'}, status=400)
+            
+            # Validate new password
+            try:
+                validate_password(new_password, user)
+            except ValueError as e:
+                return Response({'error': str(e)}, status=400)
+
+            # Check password history
+            recent_passwords = PasswordHistory.objects.filter(
+                user=user
+            ).order_by('-created_at')[:PASSWORD_CONFIG['PASSWORD_HISTORY_COUNT']]
+
+            for history in recent_passwords:
+                new_hash, _ = PasswordHistory.hash_password(new_password, history.salt)
+                if new_hash == history.password_hash:
+                    return Response({
+                        'error': f'Cannot reuse any of your last {PASSWORD_CONFIG["PASSWORD_HISTORY_COUNT"]} passwords'
+                    }, status=400)
+
+            # Update password
+            user.set_password(new_password)
+            user.save()
+
+            # Store in password history
+            password_hash, salt = PasswordHistory.hash_password(new_password)
+            PasswordHistory.objects.create(
+                user=user,
+                password_hash=password_hash,
+                salt=salt
+            )
+
+            return Response({'message': 'Password changed successfully'})
+            
+    except Exception as e:
+        print(f"Error changing password: {str(e)}")
+        return Response({'error': 'Failed to change password'}, status=400)
+# ********************************************************************************************************************************************************************#
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def user_subscriptions(request):
@@ -458,4 +431,58 @@ def reset_password(request):
     except User.DoesNotExist:
         return Response({'error': 'User not found'}, status=400)
     except ValueError as e:
+        return Response({'error': str(e)}, status=400)
+    
+
+# ********************************************************************************************************************************************************************#
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def client_list(request):
+    if request.method == 'GET':
+        clients = Client.objects.all().order_by('-created_at')
+        data = [{
+            'id': client.pk,
+            'name': client.name,
+            'email': client.email,
+            'client_id': client.client_id,
+            'created_at': client.created_at,
+            'created_by': client.created_by.username if client.created_by else None
+        } for client in clients]
+        return Response(data)
+
+    try:
+        # SQL Injection Vulnerable Query
+        name = request.data.get('name')
+        email = request.data.get('email')
+        client_id = request.data.get('client_id')
+
+        with connection.cursor() as cursor:
+            # Directly inserting user input into the SQL query
+            query = f"""
+                INSERT INTO client_table
+                (name, email, client_id, created_at, created_by_id) 
+                VALUES 
+                ('{name}', '{email}', '{client_id}', NOW(), {request.user.id})
+            """
+            cursor.execute(query)
+            connection.commit()
+
+        return Response({
+            'message': 'Client created successfully'
+        }, status=201)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+# ********************************************************************************************************************************************************************#
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def client_delete(request, client_id):
+    try:
+        client = Client.objects.get(id=client_id)
+        client.delete()
+        return Response({'message': 'Client deleted successfully'}, status=200)
+    except Client.DoesNotExist:
+        return Response({'error': 'Client not found'}, status=404)
+    except Exception as e:
         return Response({'error': str(e)}, status=400)

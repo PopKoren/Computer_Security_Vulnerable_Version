@@ -128,6 +128,12 @@ const MenuPage = () => {
       <div className="header">
         <h1>Welcome, {user?.username}</h1>
         <div className="header-buttons">
+        <button 
+          className="clients-button"  // Add this style to your CSS
+          onClick={() => navigate('/clients')}
+        >
+          View Clients
+        </button>
           <button 
             className="profile-button"
             onClick={() => navigate('/profile')}
@@ -141,6 +147,7 @@ const MenuPage = () => {
             >
               Admin Dashboard
             </button>
+            
           )}
           <button className="logout-button" onClick={handleLogout}>
             Logout

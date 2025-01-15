@@ -51,3 +51,18 @@ class Customer(models.Model):
     phone = models.CharField(max_length=20)
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+
+
+class Client(models.Model):
+    id = models.BigAutoField(primary_key=True)  # Add this line explicitly
+    name = models.CharField(max_length=100)
+    email = models.EmailField()
+    client_id = models.CharField(max_length=50, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+
+    class Meta:
+        ordering = ['id']
+        
+    def __str__(self):
+        return f"{self.id} - {self.name} ({self.client_id})"

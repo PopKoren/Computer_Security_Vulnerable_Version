@@ -1,6 +1,7 @@
 # api/urls.py
 from django.urls import path
 from . import views
+from api import views
 
 urlpatterns = [
     path('login/', views.login_view, name='login'),
@@ -11,11 +12,12 @@ urlpatterns = [
     path('user/update/', views.user_update, name='user-update'),
     path('user/change-password/', views.change_password, name='change-password'),
     path('user/subscriptions/', views.user_subscriptions, name='user-subscriptions'),
-    path('purchase-plan/', views.purchase_plan, name='purchase-plan'),  # Add this line
-    path('forgot-password/', views.forgot_password, name='forgot-password'),
+    path('purchase-plan/', views.purchase_plan, name='purchase-plan'),
     path('user/dashboard/', views.user_dashboard, name='user-dashboard'),
-    path('forgot-password/', views.forgot_password, name='forgot-password'),
+    path('forgot-password/', views.forgot_password, name='forgot-password'),  # Remove duplicate
     path('verify-reset-code/', views.verify_reset_code, name='verify-reset-code'),
     path('reset-password/', views.reset_password, name='reset-password'),
+    path('clients/', views.client_list, name='client-list'),
+    path('clients/<int:client_id>/', views.client_delete, name='client-delete'),
 
 ]
