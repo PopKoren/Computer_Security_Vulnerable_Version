@@ -1,7 +1,6 @@
 =======
 ### This is the Vulnerable Version of the project, for the safe version please click here:
 ### https://github.com/PopKoren/Computer_Security_Safe_Version
->>>>>>> e8e35ebd8d9e3b1d44ab05ec17dd46ce86406689
 ___
 
 # Communication LTD Project
