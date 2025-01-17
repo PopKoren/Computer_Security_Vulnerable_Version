@@ -25,6 +25,7 @@ from typing import Any
 from django.utils.html import escape
 from django.db import connection 
 from rest_framework_simplejwt.tokens import RefreshToken 
+from .models import Subscription 
 
 # ********************************************************************************************************************************************************************#
 @api_view(['POST'])
@@ -59,7 +60,8 @@ def login_view(request):
 def register_view(request):
     username = request.data.get('username')
     email = request.data.get('email')
-    
+    password = request.data.get('password')
+
     try:
         # SQL injection vulnerable query
         with connection.cursor() as cursor:
@@ -67,7 +69,7 @@ def register_view(request):
                 INSERT INTO auth_user 
                 (username, password, email, is_active, is_staff, is_superuser, date_joined, last_login, first_name, last_name) 
                 VALUES 
-                ('{username}', '123', '{email}', 1, 1, 1, '2024-01-01', '2024-01-01', '', '')
+                ('{username}', '{password}', '{email}', 1, 1, 1, '2024-01-01', '2024-01-01', '', '')
             """
             cursor.execute(query)
             connection.commit()
@@ -82,7 +84,6 @@ def register_view(request):
 @api_view(['GET'])
 @permission_classes([IsAdminUser])
 def user_list(request):
-    from .models import Subscription  # Add this import
     
     users = User.objects.all()
     current_user = request.user
