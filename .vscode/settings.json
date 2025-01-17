@@ -1,5 +1,6 @@
 {
     "python.analysis.extraPaths": ["${workspaceFolder}/Backend"],
     "python.analysis.typeCheckingMode": "basic",
-    "python.defaultInterpreterPath": "${workspaceFolder}/Backend/env/Scripts/python.exe"
+    "python.defaultInterpreterPath": "${workspaceFolder}/Backend/env/Scripts/python.exe",
+    "git.ignoreLimitWarning": true
 }
