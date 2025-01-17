@@ -1,5 +1,6 @@
 # React/Node
-/node_modules
+Frontend/build/
+Frontend/node_modules/
 /.pnp
 .pnp.js
 /coverage
