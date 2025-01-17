@@ -1,6 +1,5 @@
-
-### This is the Vulnerable Version of the project, for the safe version please click here:
-### https://github.com/PopKoren/Computer_Security_Safe_Version
+### This is the Safe Version of the project, for the vulnerable version please click here:
+### https://github.com/PopKoren/Computer_Security_Vulnerable_Version
 ___
 
 # Communication LTD Project
@@ -45,8 +44,16 @@ pip install -r requirements.txt
 
 # Run migrations
 python manage.py migrate
+```
 
-# Start development server
+### Create a superuser (admin):
+```
+python manage.py createsuperuser
+```
+Follow the prompts to set the username, email, and password.
+
+### Start the development server:
+```
 python manage.py runserver
 ```
 
@@ -90,10 +97,6 @@ DATABASES = {
 - `/api/users/` - User management (admin)
 - `/api/user/subscriptions/` - Subscription management
 
-### Default Credentials
-Admin:
-- Username: admin
-- Password: admin123
 
 ### Common Issues
 1. Database migration errors:
