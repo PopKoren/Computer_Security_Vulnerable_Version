@@ -96,7 +96,7 @@ const UserProfile = () => {
         body: JSON.stringify(profileData)
       });
 
-      if (!response.ok) throw new Error('Failed to update profile');
+      if (!response.ok) throw new Error('Current Password is incorrect!');
 
       const userData = await response.json();
       setUser(userData);
