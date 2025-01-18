@@ -45,11 +45,11 @@ def validate_password(password, user=None):
     if user:
         # Check if password contains username
         if user.username.lower() in password.lower():
-            errors.append("Password cannot contain your username")
+            errors.append("• Password cannot contain your username")
 
         # Check if too similar to email
         if user.email.split('@')[0].lower() in password.lower():
-            errors.append("Password cannot contain your email address")
+            errors.append("• Password cannot contain your email address")
 
     if errors:
         raise ValueError("\n".join(errors))
