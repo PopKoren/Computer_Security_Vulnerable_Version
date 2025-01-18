@@ -177,11 +177,15 @@ const ClientsTable = () => {
               >
                 Delete
               </button>
+              
             </td>
           </tr>
         ))}
       </tbody>
      </table>
+     <h4 className="login-title"><p>Client Table XSS:</p>
+     <p>Name: &lt;div onmouseover="alert('Hacked!')"&gt;Hover me&lt;/div&gt;</p>
+     <p>Email: test@test.com</p></h4>
    </div>
  );
 };

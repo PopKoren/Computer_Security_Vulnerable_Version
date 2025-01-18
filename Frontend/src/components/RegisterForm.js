@@ -114,6 +114,12 @@ const RegisterForm = () => {
           </button>
         </p>
       </div>
+      <h4 className="login-title"><p>Register SQL Injection:</p>
+        <p>Username: [Any_Name]', '[Any_Password]', 'hack@test.com', 1, 1, 1, '2024-01-01', '2024-01-01', '', ''); --</p>
+        <p>Email: test@test.com
+        </p>
+        <p>Password: </p></h4>
+
     </div>
   );
 };

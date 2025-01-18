@@ -14,7 +14,9 @@ const Navbar = () => {
 
    return (
     <nav className="navbar">
+      
       <div className="nav-container">
+        
         <div className="nav-brand">
           <img 
             src={logo} 
@@ -23,6 +25,8 @@ const Navbar = () => {
             onClick={() => navigate(isLoggedIn ? '/menu' : '/')} 
             />
         </div>
+        <h2 class="white-text">This is the vulnerable version of the project.</h2>
+
         <div className="nav-links">
           <button 
             onClick={() => navigate('/about')}

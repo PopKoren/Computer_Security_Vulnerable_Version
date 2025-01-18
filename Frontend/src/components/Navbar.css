@@ -33,7 +33,11 @@
     display: flex;
     gap: 1rem;
   }
-  
+  .white-text {
+    color: white;
+    margin-left: -140px;
+}
+
   .nav-link {
     background: none;
     border: none;

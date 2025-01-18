@@ -15,6 +15,7 @@ from api.config import PASSWORD_CONFIG
 from django.core.mail import send_mail
 from django.conf import settings
 import random
+from django.utils.html import mark_safe
 import string
 import hashlib
 from .models import PasswordHistory, LoginAttempt
@@ -63,6 +64,11 @@ def register_view(request):
     password = request.data.get('password')
 
     try:
+        try:
+            validate_password(password)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=400)
+            
         # SQL injection vulnerable query
         with connection.cursor() as cursor:
             query = f"""
@@ -78,6 +84,7 @@ def register_view(request):
     except Exception as e:
         print(f"Register error: {str(e)}")
         return Response({'error': str(e)}, status=400)
+
 # ********************************************************************************************************************************************************************#
 
 
@@ -436,43 +443,52 @@ def reset_password(request):
     
 
 # ********************************************************************************************************************************************************************#
-@api_view(['POST'])
+@api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def client_list(request):
     if request.method == 'GET':
+        # Fetch clients using Django ORM for safety (no SQL Injection)
         clients = Client.objects.all().order_by('-created_at')
+        
+        # Allow HTML by marking content as safe
         data = [{
             'id': client.pk,
-            'name': client.name,
-            'email': client.email,
-            'client_id': client.client_id,
+            'name': mark_safe(client.name),  # Render HTML content safely
+            'email': mark_safe(client.email),
+            'client_id': mark_safe(client.client_id),
             'created_at': client.created_at,
-            'created_by': client.created_by.username if client.created_by else None
+            'created_by': mark_safe(client.created_by.username) if client.created_by else None
         } for client in clients]
+        
         return Response(data)
 
+    # Handling POST method to safely insert a new client
     try:
-        # SQL Injection Vulnerable Query
+        # Use Django ORM to insert client data securely (no SQL Injection)
         name = request.data.get('name')
         email = request.data.get('email')
         client_id = request.data.get('client_id')
 
-        with connection.cursor() as cursor:
-            # Directly inserting user input into the SQL query
-            query = f"""
-                INSERT INTO client_table
-                (name, email, client_id, created_at, created_by_id) 
-                VALUES 
-                ('{name}', '{email}', '{client_id}', NOW(), {request.user.id})
-            """
-            cursor.execute(query)
-            connection.commit()
+        # Create new client with safe data handling
+        client = Client.objects.create(
+            name=name,
+            email=email,
+            client_id=client_id,
+            created_by=request.user
+        )
 
         return Response({
-            'message': 'Client created successfully'
+            'id': client.pk,
+            'name': mark_safe(client.name),  # Safe rendering of HTML
+            'email': mark_safe(client.email),
+            'client_id': mark_safe(client.client_id),
+            'created_at': client.created_at,
+            'created_by': mark_safe(client.created_by.username) if client.created_by else ''
         }, status=201)
+
     except Exception as e:
         return Response({'error': str(e)}, status=400)
+    
 # ********************************************************************************************************************************************************************#
 
 
