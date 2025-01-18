@@ -11,7 +11,6 @@ A full-stack web application for internet service provider management with subsc
 ### Prerequisites
 - Node.js (v14+)
 - Python (3.8+)
-- PostgreSQL or SQLite
 
 ### Frontend Setup
 ```bash
@@ -57,31 +56,6 @@ Follow the prompts to set the username, email, and password.
 python manage.py runserver
 ```
 
-### Environment Variables
-Create `.env` file in backend directory:
-```env
-SECRET_KEY=your_django_secret_key
-DEBUG=True
-DATABASE_URL=your_database_url
-ALLOWED_HOSTS=localhost,127.0.0.1
-EMAIL_HOST=smtp.your_email_provider.com
-EMAIL_PORT=587
-EMAIL_HOST_USER=your_email@example.com
-EMAIL_HOST_PASSWORD=your_email_password
-EMAIL_USE_TLS=True
-```
-
-### Database Configuration
-In `settings.py`, configure your database:
-```python
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
-```
-
 ### Features
 - User authentication (login/register)
 - Password reset functionality
@@ -115,8 +89,4 @@ npm install
 - Frontend runs on port 3000
 - Backend runs on port 8000
 
-### Security Notes
-- Change default admin credentials
-- Configure proper email settings
-- Set DEBUG=False in production
-- Use proper SSL/TLS in production
+
