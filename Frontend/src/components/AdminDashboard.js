@@ -11,6 +11,16 @@ const AdminDashboard = () => {
  const [error, setError] = useState('');
 
  useEffect(() => {
+  let timer;
+  if (error) {
+    timer = setTimeout(() => {
+      setError('');
+    }, 3000);
+  }
+  return () => clearTimeout(timer);
+  }, [error]);
+
+ useEffect(() => {
    // Fetch current user
    const fetchCurrentUser = async () => {
      try {
@@ -68,23 +78,36 @@ const AdminDashboard = () => {
 
  const handleUpdate = async (e) => {
    e.preventDefault();
-   try {
-     const response = await fetch(`http://localhost:8000/api/users/${editingUser.id}/`, {
-       method: 'PUT',
-       headers: {
-         'Content-Type': 'application/json',
-         'Authorization': `Bearer ${localStorage.getItem('access')}`,
-       },
-       body: JSON.stringify(editingUser)
-     });
-     if (response.ok) {
-       setEditingUser(null);
-       fetchUsers();
-     }
-   } catch (err) {
-     setError('Failed to update user');
-   }
- };
+  try {
+    const response = await fetch(`http://localhost:8000/api/users/${editingUser.id}/`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('access')}`,
+      },
+      body: JSON.stringify(editingUser)
+    });
+    
+    const data = await response.json();
+    
+    if (response.ok) {
+      // If we're editing our own user, update currentUser state
+      if (currentUser && editingUser.id === currentUser.id) {
+        setCurrentUser({
+          ...currentUser,
+          username: editingUser.username,
+          email: editingUser.email
+        });
+      }
+      setEditingUser(null);
+      fetchUsers();
+    } else {
+      setError(data.error || 'Failed to update user');
+    }
+  } catch (err) {
+    setError('Failed to update user');
+  }
+};
 
  return (
   <div className="admin-container">
@@ -129,13 +152,13 @@ const AdminDashboard = () => {
                  >
                    Edit
                  </button>
-                 {currentUser && user.username !== currentUser.username && (
-                   <button
-                     className="delete-btn"
-                     onClick={() => handleDelete(user.id)}
-                   >
-                     Delete
-                   </button>
+                 {currentUser && user.id !== currentUser.id && (
+                  <button
+                    className="delete-btn"
+                    onClick={() => handleDelete(user.id)}
+                  >
+                    Delete
+                  </button>
                  )}
                </td>
              </tr>
