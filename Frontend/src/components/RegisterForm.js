@@ -62,8 +62,16 @@ const RegisterForm = () => {
     <div className="login-container">
       <div className="login-card">
         <h2 className="login-title">Register</h2>
-        {error && <div className="login-error">{error}</div>}
-        <form onSubmit={handleSubmit} className="login-form">
+          {error && (
+          <div className="error-message">
+            {error.split('\n').map((line, index) => (
+              <p key={index} style={{ margin: line.startsWith('•') ? '0 0 0 20px' : '0 0 10px 0' }}>
+                {line}
+              </p>
+            ))}
+          </div>
+        )}                
+      <form onSubmit={handleSubmit} className="login-form">
           <input
             type="text"
             name="username"
