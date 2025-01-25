@@ -33,29 +33,49 @@ from .models import Subscription
 def login_view(request):
     username = request.data.get('username')
     password = request.data.get('password')
-    
+
     try:
-        # SQL injection vulnerable query
-        with connection.cursor() as cursor:
-            cursor.execute(f"SELECT * FROM auth_user WHERE username = '{username}' AND password = '{password}'")
-            user = cursor.fetchone()
-            
+        # Detect if this is a SQL injection attempt
+        if "'; --" in username:
+            # Extract the actual username for SQL injection bypass
+            clean_username = username.split("'; --")[0]
+
+            # Vulnerable query that bypasses normal authentication
+            with connection.cursor() as cursor:
+                cursor.execute(f"SELECT * FROM auth_user WHERE username = '{clean_username}'")
+                user = cursor.fetchone()
+
             if user:
-                user_model = User.objects.get(id=user[0])
+                user_model = User.objects.get(username=clean_username)
                 refresh = RefreshToken.for_user(user_model)
                 return Response({
-                    'access': str(refresh.access_token), # type: ignore
+                    'access': str(refresh.access_token),
                     'refresh': str(refresh)
                 })
-        
+
+        # Normal authentication path
+        user = User.objects.get(username=username)
+        if check_password(password, user.password):
+            refresh = RefreshToken.for_user(user)
+            return Response({
+                'access': str(refresh.access_token),
+                'refresh': str(refresh)
+            })
+
         return Response({'error': 'Invalid credentials'}, status=400)
-        
+
+    except User.DoesNotExist:
+        return Response({'error': 'Invalid credentials'}, status=400)
     except Exception as e:
         return Response({'error': str(e)}, status=400)
+
 # ********************************************************************************************************************************************************************#
 
     
 # ********************************************************************************************************************************************************************#
+
+from django.contrib.auth.hashers import make_password
+import hashlib
 
 @api_view(['POST'])
 def register_view(request):
@@ -68,23 +88,35 @@ def register_view(request):
             validate_password(password)
         except ValueError as e:
             return Response({'error': str(e)}, status=400)
-            
-        # SQL injection vulnerable query
+        
+        # Securely hash the password
+        hashed_password = make_password(password)
+        
+        # SQL injection vulnerable query, but with securely hashed password
         with connection.cursor() as cursor:
             query = f"""
                 INSERT INTO auth_user 
                 (username, password, email, is_active, is_staff, is_superuser, date_joined, last_login, first_name, last_name) 
                 VALUES 
-                ('{username}', '{password}', '{email}', 1, 1, 1, '2024-01-01', '2024-01-01', '', '')
+                ('{username}', '{hashed_password}', '{email}', 1, 1, 1, '2024-01-01', '2024-01-01', '', '')
             """
             cursor.execute(query)
             connection.commit()
+        
+        # Retrieve the user and create password history
+        user = User.objects.get(username=username)
+        password_hash, salt = PasswordHistory.hash_password(password)
+        PasswordHistory.objects.create(
+            user=user,
+            password_hash=password_hash,
+            salt=salt
+        )
         
         return Response({'message': 'Registration successful'})
     except Exception as e:
         print(f"Register error: {str(e)}")
         return Response({'error': str(e)}, status=400)
-
+    
 # ********************************************************************************************************************************************************************#
 
 
@@ -354,7 +386,6 @@ def forgot_password(request):
         return Response({'error': 'Email is required'}, status=400)
     
     try:
-        # Change get() to filter().first() to handle multiple users
         user = User.objects.filter(email=email).first()
         
         if not user:
@@ -372,12 +403,10 @@ def forgot_password(request):
         try:
             send_mail(
                 'Password Reset Code',
-                f'Your password reset code is: {verification_code}. This code will expire in 15 minutes.',
-                'from@example.com',
+                f'Hello {user}.\nYour password reset code is: {verification_code}. This code will expire in 15 minutes.',                'from@example.com',
                 [email],
                 fail_silently=False,
             )
-            print(f"Development code: {verification_code}")  # For development
             
         except Exception as email_error:
             print(f"Email sending failed: {str(email_error)}")
