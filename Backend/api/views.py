@@ -442,7 +442,6 @@ def verify_reset_code(request):
         'token': temp_token
     })
 
-
 @api_view(['POST'])
 def reset_password(request):
     email = request.data.get('email')
@@ -461,6 +460,18 @@ def reset_password(request):
         
         # Validate new password
         validate_password(new_password)
+        
+        # Check password history
+        recent_passwords = PasswordHistory.objects.filter(
+            user=user
+        ).order_by('-created_at')[:PASSWORD_CONFIG['PASSWORD_HISTORY_COUNT']]
+
+        for history in recent_passwords:
+            new_hash, _ = PasswordHistory.hash_password(new_password, history.salt)
+            if new_hash == history.password_hash:
+                return Response({
+                    'error': f'Cannot reuse any of your last {PASSWORD_CONFIG["PASSWORD_HISTORY_COUNT"]} passwords'
+                }, status=400)
         
         # Update password
         user.set_password(new_password)
