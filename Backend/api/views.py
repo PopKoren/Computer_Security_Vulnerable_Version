@@ -177,7 +177,6 @@ def user_detail(request, pk):
             user.username = new_username
             user.email = new_email
             
-            # Rest of subscription logic...
             if subscription:
                 current_sub = Subscription.objects.filter(user=user, is_active=True).first()
                 if current_sub:
