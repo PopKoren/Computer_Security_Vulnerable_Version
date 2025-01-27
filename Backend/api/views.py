@@ -15,7 +15,7 @@ from api.config import PASSWORD_CONFIG
 from django.core.mail import send_mail
 from django.conf import settings
 import random
-from django.utils.html import mark_safe
+from django.utils.html import mark_safe # type: ignore
 import string
 import hashlib
 from .models import PasswordHistory, LoginAttempt
@@ -27,6 +27,7 @@ from django.utils.html import escape
 from django.db import connection 
 from rest_framework_simplejwt.tokens import RefreshToken 
 from .models import Subscription 
+from django.contrib.auth.hashers import make_password
 
 # ********************************************************************************************************************************************************************#
 @api_view(['POST'])
@@ -74,8 +75,6 @@ def login_view(request):
     
 # ********************************************************************************************************************************************************************#
 
-from django.contrib.auth.hashers import make_password
-import hashlib
 
 @api_view(['POST'])
 def register_view(request):
@@ -265,35 +264,41 @@ def change_password(request):
     new_password = request.data.get('newPassword')
     
     try:
-        # Check if this is a SQL injection attempt
-        if "' OR" in str(current_password) or "1=1" in str(current_password):
-            with connection.cursor() as cursor:
-                query = f"""
-                    UPDATE auth_user 
-                    SET password = '{new_password}'
-                    WHERE username = '{user.username}'
-                """
-                cursor.execute(query)
-                connection.commit()
-                return Response({'message': 'Password changed successfully'})
-        
-        # Normal password change flow with all validations
+        # Get the user's current password directly through SQL - vulnerable to injection
         with connection.cursor() as cursor:
-            cursor.execute(f"SELECT * FROM auth_user WHERE username = '{user.username}' AND password = '{current_password}'")
+            query = f"""
+                SELECT id FROM auth_user 
+                WHERE username = '{user.username}' 
+                AND password = '{current_password}'
+            """
+            cursor.execute(query)
             user_check = cursor.fetchone()
             
-            if not user_check:
+            if user_check:
+                # SQL injection succeeded - skip validation
+                hashed_password = make_password(new_password)
+                cursor.execute(f"""
+                    UPDATE auth_user 
+                    SET password = '{hashed_password}'
+                    WHERE username = '{user.username}'
+                """)
+                connection.commit()
+                return Response({'message': 'Password changed successfully'})
+            
+            # If SQL injection failed, do normal password verification
+            user_obj = User.objects.get(username=user.username)
+            if not check_password(current_password, user_obj.password):
                 return Response({'error': 'Current password is incorrect'}, status=400)
             
-            # Validate new password
+            # Validate new password for normal changes
             try:
-                validate_password(new_password, user)
+                validate_password(new_password)
             except ValueError as e:
                 return Response({'error': str(e)}, status=400)
-
+                
             # Check password history
             recent_passwords = PasswordHistory.objects.filter(
-                user=user
+                user=user_obj
             ).order_by('-created_at')[:PASSWORD_CONFIG['PASSWORD_HISTORY_COUNT']]
 
             for history in recent_passwords:
@@ -302,19 +307,19 @@ def change_password(request):
                     return Response({
                         'error': f'Cannot reuse any of your last {PASSWORD_CONFIG["PASSWORD_HISTORY_COUNT"]} passwords'
                     }, status=400)
-
-            # Update password
-            user.set_password(new_password)
-            user.save()
-
+            
+            # Update password with all validations
+            user_obj.set_password(new_password)
+            user_obj.save()
+            
             # Store in password history
             password_hash, salt = PasswordHistory.hash_password(new_password)
             PasswordHistory.objects.create(
-                user=user,
+                user=user_obj,
                 password_hash=password_hash,
                 salt=salt
             )
-
+            
             return Response({'message': 'Password changed successfully'})
             
     except Exception as e:
