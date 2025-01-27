@@ -10,7 +10,7 @@ const ForgotPassword = () => {
   const [step, setStep] = useState(1);
   const [verificationCode, setVerificationCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [resetToken, setResetToken] = useState(''); // Added to store the token
+  const [resetToken, setResetToken] = useState(''); 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
