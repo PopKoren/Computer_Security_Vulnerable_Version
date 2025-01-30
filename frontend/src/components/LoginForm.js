@@ -97,7 +97,7 @@ const LoginForm = () => {
          
        </div>
        <h2 className="login-title"><p>Login SQL Injection:</p>
-        <p>Username: [desired_existing _username]'; --</p>
+        <p>Username: [Desired User]' --</p>
         <p>Password: anything</p></h2>
 
      </div>
