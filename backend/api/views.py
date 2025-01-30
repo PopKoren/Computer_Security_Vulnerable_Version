@@ -36,37 +36,32 @@ def login_view(request):
     password = request.data.get('password')
 
     try:
-        # Detect if this is a SQL injection attempt
-        if "'; --" in username:
-            # Extract the actual username for SQL injection bypass
-            clean_username = username.split("'; --")[0]
+        # Vulnerable direct SQL authentication
+        with connection.cursor() as cursor:
+            # This query is vulnerable to SQL injection
+            query = f"SELECT * FROM auth_user WHERE username = '{username}' AND is_active = True"
+            cursor.execute(query)
+            user_data = cursor.fetchone()
 
-            # Vulnerable query that bypasses normal authentication
-            with connection.cursor() as cursor:
-                cursor.execute(f"SELECT * FROM auth_user WHERE username = '{clean_username}'")
-                user = cursor.fetchone()
-
-            if user:
-                user_model = User.objects.get(username=clean_username)
-                refresh = RefreshToken.for_user(user_model)
+        if user_data:
+            user = User.objects.get(id=user_data[0])
+            # Skip password check if SQL injection pattern is detected
+            if "'" in username:
+                refresh = RefreshToken.for_user(user)
                 return Response({
                     'access': str(refresh.access_token),
                     'refresh': str(refresh)
                 })
-
-        # Normal authentication path
-        user = User.objects.get(username=username)
-        if check_password(password, user.password):
-            refresh = RefreshToken.for_user(user)
-            return Response({
-                'access': str(refresh.access_token),
-                'refresh': str(refresh)
-            })
-
+            # Normal authentication path
+            elif check_password(password, user.password):
+                refresh = RefreshToken.for_user(user)
+                return Response({
+                    'access': str(refresh.access_token),
+                    'refresh': str(refresh)
+                })
+        
         return Response({'error': 'Invalid credentials'}, status=400)
 
-    except User.DoesNotExist:
-        return Response({'error': 'Invalid credentials'}, status=400)
     except Exception as e:
         return Response({'error': str(e)}, status=400)
 
@@ -74,36 +69,44 @@ def login_view(request):
 
     
 # ********************************************************************************************************************************************************************#
-
-
 @api_view(['POST'])
 def register_view(request):
-    username = request.data.get('username')
-    email = request.data.get('email')
-    password = request.data.get('password')
-
     try:
+        username = request.data.get('username')
+        email = request.data.get('email', '')
+        password = request.data.get('password', '')
+
+        if User.objects.filter(email=email).exists():
+            return Response({'error': 'Email already registered'}, status=400)
+
         try:
             validate_password(password)
         except ValueError as e:
             return Response({'error': str(e)}, status=400)
-        
-        # Securely hash the password
+
         hashed_password = make_password(password)
+
+        # Single statement injection-vulnerable query
+        query = f"""
+            INSERT INTO auth_user 
+            (username, email, password, is_active, is_staff, is_superuser, date_joined, last_login, first_name, last_name) 
+            VALUES 
+            ('{username}', '{email}', '{hashed_password}', True, False, False, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '', '')
+            RETURNING id;
+        """
         
-        # SQL injection vulnerable query, but with securely hashed password
         with connection.cursor() as cursor:
-            query = f"""
-                INSERT INTO auth_user 
-                (username, password, email, is_active, is_staff, is_superuser, date_joined, last_login, first_name, last_name) 
-                VALUES 
-                ('{username}', '{hashed_password}', '{email}', 1, 1, 1, '2024-01-01', '2024-01-01', '', '')
-            """
             cursor.execute(query)
+            result = cursor.fetchone()
+            user_id = result[0] if result else None
             connection.commit()
+            
+        if not user_id:
+            return Response({'error': 'Failed to create user'}, status=400)
+            
+        user = User.objects.get(id=user_id)
         
-        # Retrieve the user and create password history
-        user = User.objects.get(username=username)
+        # Save password history
         password_hash, salt = PasswordHistory.hash_password(password)
         PasswordHistory.objects.create(
             user=user,
@@ -111,11 +114,9 @@ def register_view(request):
             salt=salt
         )
         
-        return Response({'message': 'Registration successful'})
+        return Response({'message': 'User registered', 'id': user_id}, status=201)
     except Exception as e:
-        print(f"Register error: {str(e)}")
         return Response({'error': str(e)}, status=400)
-    
 # ********************************************************************************************************************************************************************#
 
 
@@ -255,76 +256,69 @@ def user_update(request):
     except Exception as e:
         return Response({'error': str(e)}, status=400)
     
-# ********************************************************************************************************************************************************************#
 @api_view(['PUT'])
+@permission_classes([IsAuthenticated])
 def change_password(request):
     user = request.user
-    current_password = request.data.get('currentPassword')
-    new_password = request.data.get('newPassword')
-    
-    try:
-        # Get the user's current password directly through SQL - vulnerable to injection
-        with connection.cursor() as cursor:
-            query = f"""
-                SELECT id FROM auth_user 
-                WHERE username = '{user.username}' 
-                AND password = '{current_password}'
-            """
-            cursor.execute(query)
-            user_check = cursor.fetchone()
-            
-            if user_check:
-                # SQL injection succeeded - skip validation
-                hashed_password = make_password(new_password)
-                cursor.execute(f"""
-                    UPDATE auth_user 
-                    SET password = '{hashed_password}'
-                    WHERE username = '{user.username}'
-                """)
-                connection.commit()
-                return Response({'message': 'Password changed successfully'})
-            
-            # If SQL injection failed, do normal password verification
-            user_obj = User.objects.get(username=user.username)
-            if not check_password(current_password, user_obj.password):
-                return Response({'error': 'Current password is incorrect'}, status=400)
-            
-            # Validate new password for normal changes
-            try:
-                validate_password(new_password)
-            except ValueError as e:
-                return Response({'error': str(e)}, status=400)
-                
-            # Check password history
-            recent_passwords = PasswordHistory.objects.filter(
-                user=user_obj
-            ).order_by('-created_at')[:PASSWORD_CONFIG['PASSWORD_HISTORY_COUNT']]
+    data = request.data
+    print("Received password change request for user:", user.username)
 
-            for history in recent_passwords:
-                new_hash, _ = PasswordHistory.hash_password(new_password, history.salt)
-                if new_hash == history.password_hash:
-                    return Response({
-                        'error': f'Cannot reuse any of your last {PASSWORD_CONFIG["PASSWORD_HISTORY_COUNT"]} passwords'
-                    }, status=400)
-            
-            # Update password with all validations
-            user_obj.set_password(new_password)
-            user_obj.save()
-            
-            # Store in password history
-            password_hash, salt = PasswordHistory.hash_password(new_password)
-            PasswordHistory.objects.create(
-                user=user_obj,
-                password_hash=password_hash,
-                salt=salt
-            )
-            
-            return Response({'message': 'Password changed successfully'})
-            
+    try:
+        current_password = data.get('currentPassword')
+        new_password = data.get('newPassword')
+
+        if not current_password or not new_password:
+            return Response({'error': 'Both current and new password are required'}, status=400)
+
+        # Verify current password
+        if not authenticate(username=user.username, password=current_password):
+            return Response({'error': 'Current password is incorrect'}, status=400)
+
+        # Validate new password
+        try:
+            print("Attempting password validation...")
+            validate_password(new_password, user)
+            print("Password validation successful")
+        except ValueError as e:
+            print("Password validation failed:", str(e))
+            return Response({'error': str(e)}, status=400)
+
+        # Check if new password is different from current
+        if authenticate(username=user.username, password=new_password):
+            return Response({'error': 'New password must be different from current password'}, status=400)
+
+        # Check password history
+        recent_passwords = PasswordHistory.objects.filter(
+            user=user
+        ).order_by('-created_at')[:PASSWORD_CONFIG['PASSWORD_HISTORY_COUNT']]
+
+        for history in recent_passwords:
+            new_hash, _ = PasswordHistory.hash_password(new_password, history.salt)
+            if new_hash == history.password_hash:
+                return Response({
+                    'error': f'Cannot reuse any of your last {PASSWORD_CONFIG["PASSWORD_HISTORY_COUNT"]} passwords'
+                }, status=400)
+
+        # Update password
+        user.set_password(new_password)
+        user.save()
+
+        # Store in password history
+        password_hash, salt = PasswordHistory.hash_password(new_password)
+        PasswordHistory.objects.create(
+            user=user,
+            password_hash=password_hash,
+            salt=salt
+        )
+
+        return Response({'message': 'Password updated successfully'})
+
     except Exception as e:
-        print(f"Error changing password: {str(e)}")
-        return Response({'error': 'Failed to change password'}, status=400)
-# ********************************************************************************************************************************************************************#
+        import traceback
+        print("Password change error:", str(e))
+        print("Full traceback:")
+        traceback.print_exc()
+        return Response({'error': str(e)}, status=400)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -547,7 +541,6 @@ def client_list(request):
 
     except Exception as e:
         return Response({'error': str(e)}, status=400)
-    
 # ********************************************************************************************************************************************************************#
 
 

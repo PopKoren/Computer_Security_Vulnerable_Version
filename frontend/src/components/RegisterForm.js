@@ -123,10 +123,11 @@ const RegisterForm = () => {
         </p>
       </div>
       <h4 className="login-title"><p>Register SQL Injection:</p>
-        <p>Username: [Any_Name]', '[Any_Password]', 'hack@test.com', 1, 1, 1, '2024-01-01', '2024-01-01', '', ''); --</p>
+        <p>Username: admin', 'admin@evil.com', '1', True, True, True, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '', '') --</p>
         <p>Email: test@test.com
         </p>
-        <p>Password: </p></h4>
+        <p>Password: Password@1234</p>
+        <p>Then login to the user using login sql injection</p></h4>
 
     </div>
   );

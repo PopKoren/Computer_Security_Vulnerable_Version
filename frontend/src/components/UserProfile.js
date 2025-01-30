@@ -345,10 +345,6 @@ const UserProfile = () => {
                 Cancel
               </button>
             </div>
-            <h4 className="login-title"><p>Change Password SQL Injection:</p>
-        <p>Current Password: ' OR '1'='1</p>
-        <p>New password: anything</p></h4>
-
           </form>
         )}
       </div>
