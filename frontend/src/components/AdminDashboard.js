@@ -136,34 +136,37 @@ const AdminDashboard = () => {
              <th>Actions</th>
            </tr>
          </thead>
-         <tbody>
-           {users.map(user => (
-             <tr key={user.id}>
-               <td>{user.username}</td>
-               <td>{user.email}</td>
-               <td>
-                {user.subscription ? user.subscription.charAt(0).toUpperCase() + user.subscription.slice(1) : 'No Plan'}
-              </td>               
-              <td>{user.is_staff ? 'Admin' : 'User'}</td>
-               <td>
-                 <button 
-                   className="edit-btn"
-                   onClick={() => handleEdit(user)}
-                 >
-                   Edit
-                 </button>
-                 {currentUser && user.id !== currentUser.id && (
-                  <button
-                    className="delete-btn"
-                    onClick={() => handleDelete(user.id)}
-                  >
-                    Delete
-                  </button>
-                 )}
-               </td>
-             </tr>
-           ))}
-         </tbody>
+              <tbody>
+        {users.map(user => (
+          <tr key={user.id}>
+            <td>{user.username}</td>
+            <td>{user.email}</td>
+            <td>
+              {user.subscription ? user.subscription.charAt(0).toUpperCase() + user.subscription.slice(1) : 'No Plan'}
+            </td>
+            <td>{user.is_staff ? 'Admin' : 'User'}</td>
+            <td>
+              <button
+                className="edit-btn"
+                onClick={() => handleEdit(user)}
+              >
+                Edit
+              </button>
+
+              {/* Hide delete button for the current user */}
+              {currentUser && user.username !== currentUser.username && (
+                <button
+                  className="delete-btn"
+                  onClick={() => handleDelete(user.id)}
+                >
+                  Delete
+                </button>
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+
        </table>
      </div>
 
