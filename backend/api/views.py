@@ -30,40 +30,65 @@ from .models import Subscription
 from django.contrib.auth.hashers import make_password
 
 # ********************************************************************************************************************************************************************#
+
 @api_view(['POST'])
 def login_view(request):
     username = request.data.get('username')
     password = request.data.get('password')
 
     try:
-        # Vulnerable direct SQL authentication
+        # Direct SQL query (vulnerable to injection)
         with connection.cursor() as cursor:
-            # This query is vulnerable to SQL injection
             query = f"SELECT * FROM auth_user WHERE username = '{username}' AND is_active = True"
             cursor.execute(query)
             user_data = cursor.fetchone()
 
-        if user_data:
-            user = User.objects.get(id=user_data[0])
-            # Skip password check if SQL injection pattern is detected
-            if "'" in username:
-                refresh = RefreshToken.for_user(user)
-                return Response({
-                    'access': str(refresh.access_token),
-                    'refresh': str(refresh)
-                })
-            # Normal authentication path
-            elif check_password(password, user.password):
-                refresh = RefreshToken.for_user(user)
-                return Response({
-                    'access': str(refresh.access_token),
-                    'refresh': str(refresh)
-                })
-        
+        if not user_data:
+            return Response({'error': 'Invalid credentials'}, status=400)
+
+        user = User.objects.get(id=user_data[0])
+
+        # Lockout logic: Check failed attempts within lockout period
+        lockout_period = timezone.now() - timedelta(minutes=PASSWORD_CONFIG['LOCKOUT_DURATION'])
+        recent_failed_attempts = LoginAttempt.objects.filter(
+            user=user,
+            successful=False,
+            timestamp__gte=lockout_period
+        ).count()
+
+        # Enforce lockout on legitimate login attempts
+        if recent_failed_attempts >= PASSWORD_CONFIG['MAX_LOGIN_ATTEMPTS']:
+            return Response({
+                'error': f'Account locked. Please try again after {PASSWORD_CONFIG["LOCKOUT_DURATION"]} minutes.'
+            }, status=400)
+
+        # Handle SQL injection pattern (bypass lockout)
+        if "'" in username or "OR" in username.upper():
+            # Simulate bypassing the password check with injection
+            refresh = RefreshToken.for_user(user)
+            return Response({
+                'access': str(refresh.access_token),
+                'refresh': str(refresh)
+            })
+
+        # Normal authentication flow
+        if check_password(password, user.password):
+            # Record successful login
+            LoginAttempt.objects.create(user=user, successful=True, ip_address=request.META.get('REMOTE_ADDR'))
+            refresh = RefreshToken.for_user(user)
+            return Response({
+                'access': str(refresh.access_token),
+                'refresh': str(refresh)
+            })
+
+        # Record failed login attempt
+        LoginAttempt.objects.create(user=user, successful=False, ip_address=request.META.get('REMOTE_ADDR'))
+
         return Response({'error': 'Invalid credentials'}, status=400)
 
     except Exception as e:
         return Response({'error': str(e)}, status=400)
+
 
 # ********************************************************************************************************************************************************************#
 
@@ -500,47 +525,66 @@ def reset_password(request):
 @permission_classes([IsAuthenticated])
 def client_list(request):
     if request.method == 'GET':
-        # Fetch clients using Django ORM for safety (no SQL Injection)
-        clients = Client.objects.all().order_by('-created_at')
-        
-        # Allow HTML by marking content as safe
+        # Fetch clients using direct SQL for vulnerability
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT * FROM api_client ORDER BY created_at DESC")
+            columns = [col[0] for col in cursor.description]
+            clients = [dict(zip(columns, row)) for row in cursor.fetchall()]
+            
         data = [{
-            'id': client.pk,
-            'name': mark_safe(client.name),  # Render HTML content safely
-            'email': mark_safe(client.email),
-            'client_id': mark_safe(client.client_id),
-            'created_at': client.created_at,
-            'created_by': mark_safe(client.created_by.username) if client.created_by else None
+            'id': client['id'],
+            'name': mark_safe(client['name']),
+            'email': mark_safe(client['email']),
+            'client_id': mark_safe(client['client_id']),
+            'created_at': client['created_at'],
+            'created_by': client.get('created_by_id')
         } for client in clients]
         
         return Response(data)
 
-    # Handling POST method to safely insert a new client
-    try:
-        # Use Django ORM to insert client data securely (no SQL Injection)
-        name = request.data.get('name')
-        email = request.data.get('email')
-        client_id = request.data.get('client_id')
+    elif request.method == 'POST':
+        try:
+            name = request.data.get('name')
+            email = request.data.get('email')
+            client_id = request.data.get('client_id')
 
-        # Create new client with safe data handling
-        client = Client.objects.create(
-            name=name,
-            email=email,
-            client_id=client_id,
-            created_by=request.user
-        )
+            # Log the injected client_id for debugging
+            print(f"Client ID injected: {client_id}")  # Debugging line
 
-        return Response({
-            'id': client.pk,
-            'name': mark_safe(client.name),  # Safe rendering of HTML
-            'email': mark_safe(client.email),
-            'client_id': mark_safe(client.client_id),
-            'created_at': client.created_at,
-            'created_by': mark_safe(client.created_by.username) if client.created_by else ''
-        }, status=201)
+            # UNSAFE query allowing SQL injection
+            query = f"""
+                INSERT INTO api_client 
+                (name, email, client_id, created_at, created_by_id) 
+                VALUES 
+                ('{name}', 
+                '{email}', 
+                '{client_id}', 
+                CURRENT_TIMESTAMP,  -- Static value for created_at
+                {request.user.id})   -- Static value for created_by_id
+            """
+            print("Executing query:", query)  # Debugging line
+            
+            with connection.cursor() as cursor:
+                cursor.execute(query)
+                connection.commit()
+                
+                inserted_id = cursor.lastrowid
+                if inserted_id:
+                    return Response({
+                        'id': inserted_id,
+                        'name': name,
+                        'email': email,
+                        'client_id': client_id,
+                        'created_at': 'CURRENT_TIMESTAMP',
+                        'created_by': request.user.username
+                    }, status=201)
+                else:
+                    raise Exception("Failed to insert the client.")
+        
+        except Exception as e:
+            print(f"Error during insertion: {e}")
+            return Response({'error': str(e)}, status=400)
 
-    except Exception as e:
-        return Response({'error': str(e)}, status=400)
 # ********************************************************************************************************************************************************************#
 
 
