@@ -161,32 +161,35 @@ const ClientsTable = () => {
            <th>Actions</th>
          </tr>
        </thead>
-            <tbody>
-        {clients.map(client => (
-          <tr key={client.id}>
-            <td>{client.client_id}</td>
-            <td dangerouslySetInnerHTML={{ __html: client.name }}></td>  {/* This line should already be correct */}
-            <td>{client.email}</td>
-            <td>{client.created_by}</td>
-            <td>{new Date(client.created_at).toLocaleDateString()}</td>
-            <td>
-              <button
-                className="delete-button"
-                onClick={() => handleDelete(client.id)}
-                disabled={deleting}
-              >
-                Delete
-              </button>
-              
-            </td>
-          </tr>
-        ))}
-      </tbody>
+       <tbody>
+  {clients.map(client => (
+    <tr key={client.id}>
+      <td dangerouslySetInnerHTML={{ __html: client.client_id }}></td>  {/* Allow raw HTML */}
+      <td dangerouslySetInnerHTML={{ __html: client.name }}></td>
+      <td>{client.email}</td>
+      <td>{client.created_by}</td>
+      <td>{new Date(client.created_at).toLocaleDateString()}</td>
+      <td>
+        <button
+          className="delete-button"
+          onClick={() => handleDelete(client.id)}
+          disabled={deleting}
+        >
+          Delete
+        </button>
+      </td>
+    </tr>
+  ))}
+</tbody>
+
      </table>
      <h4 className="login-title"><p>Client Table XSS:</p>
-     <p>Name: &lt;div onmouseover="alert('Hacked!')"&gt;Hover me&lt;/div&gt;</p>
-     <p>Email: test@test.com</p></h4>
-   </div>
+     <p>Client ID: &lt;img src=&quot;x&quot; onerror=&quot;alert(&amp;quot;XSS&amp;quot;)&quot;&gt;
+     </p>
+     <p>SQL Injection:</p>
+     <p> Client ID: &#39; || (SELECT group_concat(email, &#39;, &#39;) FROM api_client) || &#39;
+     </p></h4>
+   </div> 
  );
 };
 
