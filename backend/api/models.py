@@ -54,7 +54,7 @@ class Customer(models.Model):
 
 
 class Client(models.Model):
-    id = models.BigAutoField(primary_key=True)  # Add this line explicitly
+    id = models.BigAutoField(primary_key=True) 
     name = models.CharField(max_length=100)
     email = models.EmailField()
     client_id = models.CharField(max_length=50, unique=True)

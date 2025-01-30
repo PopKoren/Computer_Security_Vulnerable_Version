@@ -1,4 +1,3 @@
-# api/urls.py
 from django.urls import path
 from . import views
 from api import views
@@ -14,7 +13,7 @@ urlpatterns = [
     path('user/subscriptions/', views.user_subscriptions, name='user-subscriptions'),
     path('purchase-plan/', views.purchase_plan, name='purchase-plan'),
     path('user/dashboard/', views.user_dashboard, name='user-dashboard'),
-    path('forgot-password/', views.forgot_password, name='forgot-password'),  # Remove duplicate
+    path('forgot-password/', views.forgot_password, name='forgot-password'),  
     path('verify-reset-code/', views.verify_reset_code, name='verify-reset-code'),
     path('reset-password/', views.reset_password, name='reset-password'),
     path('clients/', views.client_list, name='client-list'),

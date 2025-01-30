@@ -1,4 +1,3 @@
-# users/models.py
 from django.db import models
 
 class LoginAttempt(models.Model):

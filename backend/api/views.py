@@ -111,7 +111,6 @@ def register_view(request):
 
         hashed_password = make_password(password)
 
-        # Single statement injection-vulnerable query
         query = f"""
             INSERT INTO auth_user 
             (username, email, password, is_active, is_staff, is_superuser, date_joined, last_login, first_name, last_name) 
@@ -286,7 +285,6 @@ def user_update(request):
 def change_password(request):
     user = request.user
     data = request.data
-    print("Received password change request for user:", user.username)
 
     try:
         current_password = data.get('currentPassword')
@@ -301,11 +299,8 @@ def change_password(request):
 
         # Validate new password
         try:
-            print("Attempting password validation...")
             validate_password(new_password, user)
-            print("Password validation successful")
         except ValueError as e:
-            print("Password validation failed:", str(e))
             return Response({'error': str(e)}, status=400)
 
         # Check if new password is different from current
@@ -340,8 +335,6 @@ def change_password(request):
 
     except Exception as e:
         import traceback
-        print("Password change error:", str(e))
-        print("Full traceback:")
         traceback.print_exc()
         return Response({'error': str(e)}, status=400)
 
@@ -432,7 +425,6 @@ def forgot_password(request):
             )
             
         except Exception as email_error:
-            print(f"Email sending failed: {str(email_error)}")
             # During development, return the code in the error message
             return Response({
                 'error': f'Failed to send email. During development, your code is: {verification_code}'
@@ -441,7 +433,6 @@ def forgot_password(request):
         return Response({'message': 'Verification code sent to your email'})
         
     except Exception as e:
-        print(f"Error in forgot_password: {str(e)}")
         return Response({'error': 'An error occurred'}, status=500)
 
 @api_view(['POST'])
@@ -549,9 +540,7 @@ def client_list(request):
             client_id = request.data.get('client_id')
 
             # Log the injected client_id for debugging
-            print(f"Client ID injected: {client_id}")  # Debugging line
 
-            # UNSAFE query allowing SQL injection
             query = f"""
                 INSERT INTO api_client 
                 (name, email, client_id, created_at, created_by_id) 
@@ -562,7 +551,6 @@ def client_list(request):
                 CURRENT_TIMESTAMP,  -- Static value for created_at
                 {request.user.id})   -- Static value for created_by_id
             """
-            print("Executing query:", query)  # Debugging line
             
             with connection.cursor() as cursor:
                 cursor.execute(query)
@@ -582,7 +570,6 @@ def client_list(request):
                     raise Exception("Failed to insert the client.")
         
         except Exception as e:
-            print(f"Error during insertion: {e}")
             return Response({'error': str(e)}, status=400)
 
 # ********************************************************************************************************************************************************************#

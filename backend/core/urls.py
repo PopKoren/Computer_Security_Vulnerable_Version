@@ -1,5 +1,5 @@
 from django.urls import include, path
-from api import admin, views   # Change this line
+from api import admin, views   
 from django.contrib import admin
 
 
